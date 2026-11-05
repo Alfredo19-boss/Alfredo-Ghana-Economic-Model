@@ -1,0 +1,12 @@
+import {execSync as X} from 'child_process';import fs from 'fs';
+const WB={agri:'NV.AGR.TOTL.KD.ZG',ind:'NV.IND.TOTL.KD.ZG',man:'NV.IND.MANF.KD.ZG',srv:'NV.SRV.TOTL.KD.ZG',cpi:'FP.CPI.TOTL.ZG',res:'FI.RES.TOTL.MO',ca:'BN.CAB.XOKA.GD.ZS',exp:'NE.EXP.GNFS.KD.ZG',fdi:'BX.KLT.DINV.WD.GD.ZS',rem:'BX.TRF.PWKR.DT.GD.ZS',une:'SL.UEM.TOTL.ZS',you:'SL.UEM.1524.ZS',emp:'SL.EMP.TOTL.SP.ZS',pcg:'NY.GDP.PCAP.KD.ZG',npl:'FB.AST.NPER.ZS',cre:'FS.AST.PRVT.GD.ZS',inv:'NE.GDI.FTOT.ZS'},CH={net:'IT.NET.USER.ZS',ele:'EG.ELC.ACCS.ZS'},SH={agri:'NV.AGR.TOTL.ZS',man:'NV.IND.MANF.ZS',indT:'NV.IND.TOTL.ZS',srv:'NV.SRV.TOTL.ZS'},IMF={bal:'GGXCNL_NGDP',rev:'GGR_NGDP'};
+const UA='GhanaEconomicModel/1.0 (research dashboard; low-volume)',errors=[];const get=u=>{for(let a=0;a<3;a++){try{return JSON.parse(X(`curl -sSfL -m 40 -A "${UA}" "${u}"`,{maxBuffer:5e7,stdio:['ignore','pipe','ignore']}).toString())}catch(e){X('sleep 5')}}return null};
+const wb=c=>{const d=get(`https://api.worldbank.org/v2/country/GHA/indicator/${c}?format=json&date=2005:2030&per_page=100`);if(!d||!d[1]){errors.push(c);return null}const m={};d[1].forEach(x=>{if(typeof x.value=='number')m[x.date]=+x.value.toFixed(3)});return m};
+const I={};for(const k in WB){const m=wb(WB[k]);if(m)I[k]=Object.fromEntries(Object.entries(m).filter(e=>+e[0]>=2007))}
+for(const k in CH){const m=wb(CH[k]);if(m){I[k]={};for(const y in m)if(+y>=2007&&m[y-1]!=null)I[k][y]=+(m[y]-m[y-1]).toFixed(2)}}
+const f=wb('PA.NUS.FCRF');if(f){I.fx={};for(const y in f)if(+y>=2007&&f[y-1]!=null)I.fx[y]=+((f[y]/f[y-1]-1)*100).toFixed(2)}
+const shares={};for(const k in SH){const m=wb(SH[k]);if(m){const y=Math.max(...Object.keys(m).map(Number));shares[k]=m[y]}}
+if(shares.indT!=null&&shares.man!=null){shares.ind=+(shares.indT-shares.man).toFixed(3)}delete shares.indT;
+for(const k in IMF){const d=get(`https://api.db.nomics.world/v22/series/IMF/WEO:latest/GHA.${IMF[k]}.pcent_gdp?observations=1`),s=d&&d.series&&d.series.docs[0];if(!s){errors.push(IMF[k]);continue}const v=+String(s.dataset_code).match(/(\d{4})/)[1];I[k]={};s.period.forEach((y,i)=>{if(+y>=2007&&+y<v&&typeof s.value[i]=='number')I[k][y]=s.value[i]});I[k+'_v']=undefined;delete I[k+'_v']}
+const n=Object.keys(I).length;if(n<11){console.error('too few series '+n+' failed: '+errors.join(','));process.exit(1)}
+fs.writeFileSync(process.argv[2],JSON.stringify({fetchedAt:new Date().toISOString(),I,shares,errors,annualError:''}));console.log('series',n,'errors',errors.length);

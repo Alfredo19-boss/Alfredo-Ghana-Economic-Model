@@ -1,0 +1,31 @@
+name: Update economic model data
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Live figures
+        run: node model/tools/sync.mjs model/live.json model/live.tmp.json && mv model/live.tmp.json model/live.json
+      - name: Yearly figures, once a day
+        run: |
+          if [ "$(date -u +%H)" = "06" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            node model/tools/annual.mjs model/annual.tmp.json && mv model/annual.tmp.json model/annual.json || echo "Yearly refresh failed, keeping last data"
+          fi
+      - name: Save changes
+        run: |
+          git config user.name "model-data-bot"
+          git config user.email "model-data-bot@users.noreply.github.com"
+          git add model/live.json model/annual.json
+          git diff --cached --quiet || git commit -m "Update model data"
+          git pull --rebase origin main
+          git push
